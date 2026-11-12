@@ -1,11 +1,12 @@
 services:
   immich-qwen-search:
-    image: ghcr.io/wangzhigang1999/immich-qwen-search:v0.1.0
+    image: ghcr.io/wangzhigang1999/immich-qwen-search:v0.1.1
     environment:
       IMMICH_ML_URL: http://immich-machine-learning:3003
+      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
       QWEN_ST_IDLE_SECONDS: "600"
     volumes:
-      - qwen-model-cache:/cache
+      - "${QWEN_MODEL_CACHE:-qwen-model-cache}:/cache"
     deploy:
       resources:
         reservations:

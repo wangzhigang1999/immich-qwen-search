@@ -30,7 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate Compose
-        run: docker compose -f compose.qwen.yaml config --quiet
+        run: |
+          docker compose -f compose.qwen.yaml config --format json |
+            jq -e '.services["immich-qwen-search"].volumes[0] | .type == "volume" and .target == "/cache"'
+          QWEN_MODEL_CACHE="$RUNNER_TEMP/qwen-cache" docker compose -f compose.qwen.yaml config --format json |
+            jq -e '.services["immich-qwen-search"].volumes[0] | .type == "bind" and .target == "/cache"'
       - name: Build Linux image
         run: |
           docker build --platform linux/amd64 \

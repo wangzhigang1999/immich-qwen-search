@@ -1,0 +1,19 @@
+services:
+  immich-qwen-search:
+    image: ghcr.io/wangzhigang1999/immich-qwen-search:v0.1.0
+    environment:
+      IMMICH_ML_URL: http://immich-machine-learning:3003
+      QWEN_ST_IDLE_SECONDS: "600"
+    volumes:
+      - qwen-model-cache:/cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  qwen-model-cache:

@@ -9,7 +9,6 @@ from zipfile import ZipFile
 
 import numpy as np
 
-
 LANGUAGES = ("zh", "en")
 
 
@@ -22,6 +21,7 @@ def verify_checkpoint(encoder):
     import torch
     from huggingface_hub import hf_hub_download
     from safetensors import safe_open
+
     from encoder import MODEL, REVISION
 
     checkpoint = hf_hub_download(MODEL, "model.safetensors", revision=REVISION)
@@ -45,6 +45,7 @@ def verify_checkpoint(encoder):
 
 def encode(fixtures, destination, limit):
     import torch
+
     from encoder import Encoder, preview
 
     manifest = load_fixtures(fixtures)

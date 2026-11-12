@@ -1,0 +1,64 @@
+name: CI and image publish
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: pipx run --spec ruff==0.14.14 ruff check .
+      - run: pipx run --spec ruff==0.14.14 ruff format --check .
+
+  image:
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/wangzhigang1999/immich-qwen-search
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Validate Compose
+        run: docker compose -f compose.qwen.yaml config --quiet
+      - name: Build Linux image
+        run: |
+          docker build --platform linux/amd64 \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$IMAGE:$GITHUB_SHA" .
+      - name: Test HTTP routes and CUDA dependencies
+        run: |
+          docker run --rm --network none "$IMAGE:$GITHUB_SHA" \
+            python -c 'import torch, torchvision; assert torch.version.cuda == "12.8"'
+          docker run --rm --network none \
+            -e HF_HUB_OFFLINE=1 \
+            -v "$PWD/tests:/tests:ro" \
+            "$IMAGE:$GITHUB_SHA" python -m unittest discover -s /tests
+      - name: Smoke-test the container entry point
+        run: |
+          docker run --detach --name qwen-smoke \
+            -e HF_HUB_OFFLINE=1 \
+            -p 127.0.0.1:13003:3003 \
+            "$IMAGE:$GITHUB_SHA"
+          trap 'docker logs qwen-smoke; docker rm -f qwen-smoke' EXIT
+          response="$(curl -fsS --retry 20 --retry-connrefused --retry-delay 1 --max-time 5 http://127.0.0.1:13003/ping)"
+          test "$response" = pong
+      - name: Push versioned image
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker tag "$IMAGE:$GITHUB_SHA" "$IMAGE:$GITHUB_REF_NAME"
+          docker push "$IMAGE:$GITHUB_REF_NAME"

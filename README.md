@@ -1,10 +1,31 @@
 # Immich Qwen Smart Search with Sentence Transformers
 
-This prototype runs Qwen3-VL-Embedding-2B in a Python process and exposes the
+This adapter runs Qwen3-VL-Embedding-2B locally and exposes the
 Immich machine-learning endpoints. The adapter returns 512-dimensional vectors
 using the first 512 coordinates followed by L2 normalization. It uses the
 official Hugging Face checkpoint pinned in `encoder.py` and the same text
 and image instructions as the GGUF deployment.
+
+## Docker
+
+Download `compose.qwen.yaml` from the [release](https://github.com/wangzhigang1999/immich-qwen-search/releases/latest)
+and put it next to your existing Immich Compose file. The image targets Linux
+x86-64 with an NVIDIA GPU. Use NVIDIA Container Toolkit on Linux or the WSL 2
+backend with GPU support on Docker Desktop for Windows.
+
+```sh
+docker compose -f docker-compose.yml -f compose.qwen.yaml up -d immich-qwen-search
+```
+
+In Immich's Machine Learning settings, use `http://immich-qwen-search:3003` as
+the ML URL and `sentence-qwen3-vl-embedding-2b/ViT-B-32__openai` as the Smart
+Search model. The adapter forwards other tasks to `immich-machine-learning`
+on the same network. For a fresh index, run the Smart Search job for all
+assets after changing models. The first request downloads the official
+weights into the persistent cache volume.
+
+For upgrades, download the next release's Compose file and repeat the same
+command. Keep the same cache volume.
 
 ## Run locally on Windows
 
@@ -60,7 +81,12 @@ It also checks new queries against the old image vectors and a deterministic
 half-old, half-new gallery. Top-1 differences use a paired bootstrap grouped by
 image, retaining the captions that belong to each sampled image.
 
-See [results.json](results.json) for the run on the RTX 3060 Laptop GPU with
-512 images, 1,014 Chinese queries and 1,024 English queries. It includes
-dedicated GPU memory measured per process. The benchmark checks checkpoint
-tensors in both model towers before encoding the fixtures.
+On 512 public images with an RTX 3060 Laptop GPU, we measured the following
+Chinese top-1 recall and peak dedicated GPU memory for each runtime.
+
+| Setup | Top-1 recall | Peak VRAM |
+| --- | ---: | ---: |
+| GGUF, Vulkan | 87.38% | 2.52 GiB |
+| Sentence Transformers, CUDA | 86.79% | 4.40 GiB |
+
+Sentence Transformers queries against the existing GGUF image vectors scored 87.18%.

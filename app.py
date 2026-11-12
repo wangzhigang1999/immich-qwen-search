@@ -1,18 +1,17 @@
 """Immich machine-learning HTTP adapter for the Sentence Transformers prototype."""
 
 import asyncio
-from contextlib import asynccontextmanager, suppress
 import json
 import os
+from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI, HTTPException, Request, Response
 import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
 from PIL import Image
 from starlette.datastructures import UploadFile
 
 from encoder import MODEL_NAME, preview
 from session import ModelSession
-
 
 MAX_BODY = 64 * 1024 * 1024
 UPSTREAM = os.environ.get("IMMICH_ML_URL", "").rstrip("/")
@@ -86,7 +85,11 @@ async def predict(request: Request):
                 )
             except httpx.HTTPError as error:
                 raise HTTPException(502, "Immich machine learning is unavailable") from error
-            return Response(response.content, response.status_code, media_type=response.headers.get("Content-Type"))
+            return Response(
+                response.content,
+                response.status_code,
+                media_type=response.headers.get("Content-Type"),
+            )
 
         clip = entries["clip"]
         if len(entries) != 1 or not isinstance(clip, dict) or len(clip) != 1:
@@ -109,5 +112,7 @@ async def predict(request: Request):
         else:
             raise HTTPException(422, "Unsupported Smart Search operation")
 
-        vector = await asyncio.to_thread(request.app.state.model.encode, item, image=mode == "visual")
+        vector = await asyncio.to_thread(
+            request.app.state.model.encode, item, image=mode == "visual"
+        )
         return {"clip": json.dumps(vector.tolist(), separators=(",", ":"))}

@@ -8,7 +8,6 @@ import time
 
 from encoder import Encoder
 
-
 LOGGER = logging.getLogger("uvicorn.error")
 
 

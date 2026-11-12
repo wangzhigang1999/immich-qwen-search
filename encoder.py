@@ -1,11 +1,10 @@
 """Local Qwen text and image embeddings for Immich Smart Search."""
 
-from io import BytesIO
 import os
+from io import BytesIO
 
 import numpy as np
 from PIL import Image, ImageOps
-
 
 MODEL = "Qwen/Qwen3-VL-Embedding-2B"
 REVISION = "9f2f7e710d6d81056aa5c0a4f04764fec6bb7bda"
@@ -30,8 +29,8 @@ def preview(data: bytes) -> Image.Image:
 
 class Encoder:
     def __init__(self):
-        from sentence_transformers import SentenceTransformer
         import torch
+        from sentence_transformers import SentenceTransformer
 
         self.device = os.environ.get("QWEN_ST_DEVICE", "cuda")
         cuda = self.device.startswith("cuda")
@@ -47,13 +46,18 @@ class Encoder:
         )
 
     def encode(self, inputs, *, image=False):
-        vectors = self.model.encode(
-            inputs,
-            prompt=IMAGE_INSTRUCTION if image else QUERY_INSTRUCTION,
-            batch_size=len(inputs),
-            convert_to_tensor=True,
-            show_progress_bar=False,
-        ).float().cpu().numpy()[:, :DIMENSION]
+        vectors = (
+            self.model.encode(
+                inputs,
+                prompt=IMAGE_INSTRUCTION if image else QUERY_INSTRUCTION,
+                batch_size=len(inputs),
+                convert_to_tensor=True,
+                show_progress_bar=False,
+            )
+            .float()
+            .cpu()
+            .numpy()[:, :DIMENSION]
+        )
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         if vectors.shape[1] != DIMENSION or not np.isfinite(vectors).all() or np.any(norms < 1e-8):
             raise RuntimeError("Invalid Qwen embedding")

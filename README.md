@@ -19,7 +19,7 @@ and the Smart Search model to `sentence-qwen3-vl-embedding-2b/ViT-B-32__openai`.
 Run Smart Search for all assets when switching from a different model. Other ML
 tasks are forwarded to the original `immich-machine-learning` service.
 
-The first request downloads the weights. The model unloads after 10 minutes
+The first request downloads the weights if the cache is empty. The model unloads after 10 minutes
 without inference and reloads on demand.
 
 ## Model cache

@@ -40,7 +40,7 @@ jobs:
       - name: Test HTTP routes and CUDA dependencies
         run: |
           docker run --rm --network none "$IMAGE:$GITHUB_SHA" \
-            python -c 'import os, torch, torchvision; assert torch.version.cuda == "12.8" and os.access("/cache", os.W_OK)'
+            python -c 'import os, torch, torchvision; from sentence_transformers import SentenceTransformer; from transformers import Qwen3VLModel; assert torch.version.cuda == "12.8" and os.access("/cache", os.W_OK)'
           docker run --rm --network none \
             -e HF_HUB_OFFLINE=1 \
             -v "$PWD/tests:/tests:ro" \

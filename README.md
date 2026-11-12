@@ -64,25 +64,9 @@ Immich server container before using that URL for Machine Learning in
 Immich. Keep one active URL for Smart Search and save the previous URL
 before the cutover.
 
-## Reproduce the benchmark
+## Benchmark
 
-Use the same Crossmodal-3600 fixture archive as the GGUF benchmark. The archive
-has `manifest.json` with the ordered records and captions, and one JPEG per
-image ID. The GGUF embedding archive is a gzip-compressed JSON object with
-matching image IDs, image vectors, text vectors and caption labels.
-
-```powershell
-.venv\Scripts\python.exe benchmark.py encode PATH_TO_FIXTURES.zip st-vectors.npz
-.venv\Scripts\python.exe benchmark.py compare PATH_TO_GGUF.json.gz st-vectors.npz results.json
-```
-
-The comparison ranks each caption's annotated image by cosine similarity.
-It also checks new queries against the old image vectors and a deterministic
-half-old, half-new gallery. Top-1 differences use a paired bootstrap grouped by
-image, retaining the captions that belong to each sampled image.
-
-On 512 public images with an RTX 3060 Laptop GPU, we measured the following
-Chinese top-1 recall and peak dedicated GPU memory for each runtime.
+Chinese text-to-image search on 512 Crossmodal-3600 images with an RTX 3060 Laptop GPU.
 
 | Setup | Top-1 recall | Peak VRAM |
 | --- | ---: | ---: |

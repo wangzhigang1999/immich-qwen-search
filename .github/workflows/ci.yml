@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: pipx run --spec ruff==0.14.14 ruff check .
       - run: pipx run --spec ruff==0.14.14 ruff format --check .
 
@@ -28,7 +28,7 @@ jobs:
     env:
       IMAGE: ghcr.io/wangzhigang1999/immich-qwen-search
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate Compose
         run: docker compose -f compose.qwen.yaml config --quiet
       - name: Build Linux image

@@ -7,6 +7,8 @@ RUN --mount=type=bind,from=uv,source=/uv,target=/usr/local/bin/uv \
     uv venv --no-cache --system-site-packages --python /usr/bin/python3 /opt/adapter \
     && /opt/adapter/bin/python -m pip install --no-cache-dir -r requirements.txt \
         "torch==2.10.0+cu128" "torchvision==0.25.0+cu128" \
+    && groupadd --gid 10001 qwen \
+    && useradd --uid 10001 --gid qwen --home-dir /cache --no-create-home --shell /usr/sbin/nologin qwen \
     && mkdir -p /cache \
     && chown 10001:10001 /cache
 

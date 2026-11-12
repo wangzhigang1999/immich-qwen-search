@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+cache/
+logs/
+deployment.psd1
+.env
+*.gguf
+*.safetensors
+*.npz
+*.zip
+*.tar
+*.gz

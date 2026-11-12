@@ -1,0 +1,66 @@
+# Immich Qwen Smart Search with Sentence Transformers
+
+This prototype runs Qwen3-VL-Embedding-2B in a Python process and exposes the
+Immich machine-learning endpoints. The adapter returns 512-dimensional vectors
+using the first 512 coordinates followed by L2 normalization. It uses the
+official Hugging Face checkpoint pinned in `encoder.py` and the same text
+and image instructions as the GGUF deployment.
+
+## Run locally on Windows
+
+With Python 3.12, uv and an NVIDIA driver that supports CUDA 12.8, run these
+commands from this directory.
+
+```powershell
+uv venv --python 3.12 .venv
+uv pip install --python .venv\Scripts\python.exe --torch-backend cu128 "torch==2.10.0" "torchvision==0.25.0" -r requirements.txt
+.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 17933
+```
+
+The first prediction downloads and loads the weights. CUDA uses BF16. Set
+`QWEN_ST_DEVICE=cpu` to run with FP32 on the CPU. The model unloads after
+600 seconds without inference by default. Set `QWEN_ST_IDLE_SECONDS` to
+change the interval. The next prediction reloads the weights from disk.
+Health probes leave the model unloaded. Run one Uvicorn worker per GPU.
+
+The Windows launcher `run.ps1` reads optional environment overrides from a
+local `deployment.psd1` PowerShell data file and writes logs under `logs`.
+
+`GET /ping` checks whether the adapter has started. `POST /predict` accepts
+Immich multipart requests. Set the Smart Search model name in a test request
+to `sentence-qwen3-vl-embedding-2b/ViT-B-32__openai`. The suffix selects the
+512-dimensional index in Immich 3.3.5. Set `QWEN_ST_MODEL_NAME` to an existing
+Immich model name when intentionally reusing an index you have verified for
+compatibility. For other machine-learning requests,
+set `IMMICH_ML_URL` to the URL of the original ML service. Keep the prototype
+on loopback for local testing or place it on a trusted private network for
+integration testing.
+
+For a Windows host with Docker Desktop, publish the built-in ML service on
+`127.0.0.1:17934` and set `IMMICH_ML_URL=http://127.0.0.1:17934` for the
+adapter. Verify `http://host.docker.internal:17933/ping` from inside the
+Immich server container before using that URL for Machine Learning in
+Immich. Keep one active URL for Smart Search and save the previous URL
+before the cutover.
+
+## Reproduce the benchmark
+
+Use the same Crossmodal-3600 fixture archive as the GGUF benchmark. The archive
+has `manifest.json` with the ordered records and captions, and one JPEG per
+image ID. The GGUF embedding archive is a gzip-compressed JSON object with
+matching image IDs, image vectors, text vectors and caption labels.
+
+```powershell
+.venv\Scripts\python.exe benchmark.py encode PATH_TO_FIXTURES.zip st-vectors.npz
+.venv\Scripts\python.exe benchmark.py compare PATH_TO_GGUF.json.gz st-vectors.npz results.json
+```
+
+The comparison ranks each caption's annotated image by cosine similarity.
+It also checks new queries against the old image vectors and a deterministic
+half-old, half-new gallery. Top-1 differences use a paired bootstrap grouped by
+image, retaining the captions that belong to each sampled image.
+
+See [results.json](results.json) for the run on the RTX 3060 Laptop GPU with
+512 images, 1,014 Chinese queries and 1,024 English queries. It includes
+dedicated GPU memory measured per process. The benchmark checks checkpoint
+tensors in both model towers before encoding the fixtures.

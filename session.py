@@ -2,37 +2,51 @@
 
 import gc
 import logging
-import os
 import threading
 import time
 
+from config import Config
 from encoder import Encoder
 
 LOGGER = logging.getLogger("uvicorn.error")
 
 
 class ModelSession:
-    def __init__(self):
-        self.idle_seconds = int(os.environ.get("QWEN_ST_IDLE_SECONDS", "600"))
-        if self.idle_seconds <= 0:
-            raise ValueError("QWEN_ST_IDLE_SECONDS must be positive")
+    def __init__(self, config: Config):
+        self.config = config
+        self.idle_seconds = config.idle_seconds
         self._lock = threading.Lock()
         self._encoder = None
         self._last_used = 0.0
 
-    def encode(self, item, *, image=False):
-        with self._lock:
+    def encode(self, item, *, image=False, deadline=None):
+        acquired = (
+            self._lock.acquire()
+            if deadline is None
+            else self._lock.acquire(
+                timeout=min(threading.TIMEOUT_MAX, max(0, deadline - time.monotonic()))
+            )
+        )
+        if not acquired:
+            raise TimeoutError("Inference expired in the queue")
+        try:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("Inference expired in the queue")
             if self._encoder is None:
                 started = time.monotonic()
-                self._encoder = Encoder()
+                self._encoder = Encoder(self.config)
                 LOGGER.info("Qwen model loaded in %.2f seconds", time.monotonic() - started)
             try:
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise TimeoutError("Inference expired while loading the model")
                 return self._encoder.encode([item], image=image)[0]
             finally:
                 self._last_used = time.monotonic()
+        finally:
+            self._lock.release()
 
     def expire(self):
-        if not self._lock.acquire(blocking=False):
+        if not self.idle_seconds or not self._lock.acquire(blocking=False):
             return
         try:
             if time.monotonic() - self._last_used >= self.idle_seconds:

@@ -1,10 +1,34 @@
 services:
   immich-qwen-search:
-    image: ghcr.io/wangzhigang1999/immich-qwen-search:v0.1.1
+    image: ghcr.io/wangzhigang1999/immich-qwen-search:v0.1.2
     environment:
-      IMMICH_ML_URL: http://immich-machine-learning:3003
-      HF_HUB_OFFLINE: "${HF_HUB_OFFLINE:-0}"
-      QWEN_ST_IDLE_SECONDS: "600"
+      IMMICH_ML_URL: "${IMMICH_ML_URL-http://immich-machine-learning:3003}"
+      IMMICH_ML_TIMEOUT:
+      IMMICH_ML_CONNECT_TIMEOUT:
+      IMMICH_ML_HEALTH_TIMEOUT:
+      QWEN_ST_DEVICE:
+      QWEN_ST_DTYPE:
+      QWEN_ST_ATTENTION:
+      OMP_NUM_THREADS:
+      MKL_NUM_THREADS:
+      QWEN_ST_MODEL:
+      QWEN_ST_REVISION:
+      QWEN_ST_MODEL_NAME:
+      QWEN_ST_DIMENSION:
+      QWEN_ST_QUERY_PROMPT:
+      QWEN_ST_IMAGE_PROMPT:
+      QWEN_ST_IMAGE_MAX_EDGE:
+      QWEN_ST_IMAGE_MAX_PIXELS:
+      QWEN_ST_MAX_BODY_MIB:
+      QWEN_ST_IDLE_SECONDS:
+      QWEN_ST_INFERENCE_TIMEOUT:
+      HF_HUB_OFFLINE:
+      HF_HUB_DOWNLOAD_TIMEOUT:
+      HF_HUB_ETAG_TIMEOUT:
+      HF_TOKEN:
+      UVICORN_TIMEOUT_KEEP_ALIVE:
+      UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN:
+      UVICORN_LOG_LEVEL:
     volumes:
       - "${QWEN_MODEL_CACHE:-qwen-model-cache}:/cache"
     deploy:
@@ -12,8 +36,11 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              device_ids: ["${QWEN_GPU_ID:-0}"]
               capabilities: [gpu]
+    healthcheck:
+      interval: "${QWEN_HEALTHCHECK_INTERVAL:-30s}"
+      timeout: "${QWEN_HEALTHCHECK_TIMEOUT:-5s}"
     restart: unless-stopped
 
 volumes:

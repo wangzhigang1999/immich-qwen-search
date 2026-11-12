@@ -1,8 +1,8 @@
-"""Immich machine-learning HTTP adapter for the Sentence Transformers prototype."""
+"""Immich machine-learning HTTP adapter for Sentence Transformers."""
 
 import asyncio
 import json
-import os
+import time
 from contextlib import asynccontextmanager, suppress
 
 import httpx
@@ -10,24 +10,23 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from PIL import Image
 from starlette.datastructures import UploadFile
 
-from encoder import MODEL_NAME, preview
+from config import Config
+from encoder import preview
 from session import ModelSession
-
-MAX_BODY = 64 * 1024 * 1024
-UPSTREAM = os.environ.get("IMMICH_ML_URL", "").rstrip("/")
-ACTIVE_MODEL = os.environ.get("QWEN_ST_MODEL_NAME", MODEL_NAME)
 
 
 async def expire_when_idle(model):
-    while True:
+    while model.idle_seconds:
         await asyncio.sleep(1)
         await asyncio.to_thread(model.expire)
 
 
 @asynccontextmanager
 async def lifespan(app):
-    app.state.model = ModelSession()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=3), trust_env=False) as client:
+    config = app.state.config = Config()
+    app.state.model = ModelSession(config)
+    timeout = httpx.Timeout(config.upstream_timeout, connect=config.connect_timeout)
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         app.state.client = client
         expiry = asyncio.create_task(expire_when_idle(app.state.model))
         try:
@@ -44,9 +43,12 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 
 @app.get("/ping")
 async def ping(request: Request):
-    if UPSTREAM:
+    config = request.app.state.config
+    if config.upstream:
         try:
-            upstream = await request.app.state.client.get(f"{UPSTREAM}/ping", timeout=2)
+            upstream = await request.app.state.client.get(
+                f"{config.upstream}/ping", timeout=config.health_timeout
+            )
             upstream.raise_for_status()
         except httpx.HTTPError as error:
             raise HTTPException(503, "Immich machine learning is unavailable") from error
@@ -55,9 +57,10 @@ async def ping(request: Request):
 
 @app.post("/predict")
 async def predict(request: Request):
+    config = request.app.state.config
     body = bytearray()
     async for chunk in request.stream():
-        if len(body) + len(chunk) > MAX_BODY:
+        if len(body) + len(chunk) > config.max_body:
             raise HTTPException(413, "Request body is too large")
         body.extend(chunk)
 
@@ -75,11 +78,11 @@ async def predict(request: Request):
         if not isinstance(entries, dict) or not entries:
             raise HTTPException(422, "Missing Immich machine learning task")
         if "clip" not in entries:
-            if not UPSTREAM:
+            if not config.upstream:
                 raise HTTPException(503, "Set IMMICH_ML_URL to forward other Immich tasks")
             try:
                 response = await request.app.state.client.post(
-                    f"{UPSTREAM}/predict",
+                    f"{config.upstream}/predict",
                     content=raw_body,
                     headers={"Content-Type": request.headers["content-type"]},
                 )
@@ -95,7 +98,7 @@ async def predict(request: Request):
         if len(entries) != 1 or not isinstance(clip, dict) or len(clip) != 1:
             raise HTTPException(422, "Expected one Smart Search operation")
         mode, settings = next(iter(clip.items()))
-        if not isinstance(settings, dict) or settings.get("modelName") != ACTIVE_MODEL:
+        if not isinstance(settings, dict) or settings.get("modelName") != config.model_name:
             raise HTTPException(409, "Unexpected Smart Search model name")
         if mode == "textual":
             item = form.get("text")
@@ -106,13 +109,19 @@ async def predict(request: Request):
             if not isinstance(image, UploadFile):
                 raise HTTPException(422, "Missing preview image")
             try:
-                item = await asyncio.to_thread(preview, await image.read())
+                item = await asyncio.to_thread(preview, await image.read(), config)
             except (OSError, ValueError, Image.DecompressionBombError) as error:
                 raise HTTPException(422, "Invalid preview image") from error
         else:
             raise HTTPException(422, "Unsupported Smart Search operation")
 
-        vector = await asyncio.to_thread(
-            request.app.state.model.encode, item, image=mode == "visual"
-        )
+        timeout = config.inference_timeout
+        deadline = None if timeout is None else time.monotonic() + timeout
+        try:
+            async with asyncio.timeout(timeout):
+                vector = await asyncio.to_thread(
+                    request.app.state.model.encode, item, image=mode == "visual", deadline=deadline
+                )
+        except TimeoutError as error:
+            raise HTTPException(504, "Smart Search inference timed out") from error
         return {"clip": json.dumps(vector.tolist(), separators=(",", ":"))}

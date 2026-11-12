@@ -1,64 +1,58 @@
 """Local Qwen text and image embeddings for Immich Smart Search."""
 
-import os
 from io import BytesIO
 
 import numpy as np
 from PIL import Image, ImageOps
 
-MODEL = "Qwen/Qwen3-VL-Embedding-2B"
-REVISION = "9f2f7e710d6d81056aa5c0a4f04764fec6bb7bda"
-MODEL_NAME = "sentence-qwen3-vl-embedding-2b/ViT-B-32__openai"
-DIMENSION = 512
-MAX_EDGE = 768
-MAX_PIXELS = 80_000_000
-IMAGE_INSTRUCTION = "Represent the user's input."
-QUERY_INSTRUCTION = "Retrieve images that match the given text."
+from config import Config
 
 
-def preview(data: bytes) -> Image.Image:
+def preview(data: bytes, config: Config) -> Image.Image:
+    max_edge = config.image_max_edge
     with Image.open(BytesIO(data)) as original:
-        if original.width * original.height > MAX_PIXELS:
+        if original.width * original.height > config.image_max_pixels:
             raise ValueError("Image exceeds the pixel limit")
         if original.format == "JPEG" and original.width * original.height > 36_000_000:
-            original.draft("RGB", (MAX_EDGE, MAX_EDGE))
+            original.draft("RGB", (max_edge, max_edge))
         image = ImageOps.exif_transpose(original).convert("RGB")
-        image.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
+        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
         return image
 
 
 class Encoder:
-    def __init__(self):
+    def __init__(self, config: Config):
         import torch
         from sentence_transformers import SentenceTransformer
 
-        self.device = os.environ.get("QWEN_ST_DEVICE", "cuda")
-        cuda = self.device.startswith("cuda")
+        self.config = config
+        self.device = config.device
         self.model = SentenceTransformer(
-            MODEL,
-            revision=REVISION,
+            config.model,
+            revision=config.revision,
             device=self.device,
             model_kwargs={
-                "dtype": torch.bfloat16 if cuda else torch.float32,
-                "attn_implementation": "sdpa",
+                "dtype": getattr(torch, config.dtype),
+                "attn_implementation": config.attention,
                 "device_map": {"": self.device},
             },
         )
 
     def encode(self, inputs, *, image=False):
+        dimension = self.config.dimension
         vectors = (
             self.model.encode(
                 inputs,
-                prompt=IMAGE_INSTRUCTION if image else QUERY_INSTRUCTION,
+                prompt=self.config.image_prompt if image else self.config.query_prompt,
                 batch_size=len(inputs),
                 convert_to_tensor=True,
                 show_progress_bar=False,
             )
             .float()
             .cpu()
-            .numpy()[:, :DIMENSION]
+            .numpy()[:, :dimension]
         )
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-        if vectors.shape[1] != DIMENSION or not np.isfinite(vectors).all() or np.any(norms < 1e-8):
+        if vectors.shape[1] != dimension or not np.isfinite(vectors).all() or np.any(norms < 1e-8):
             raise RuntimeError("Invalid Qwen embedding")
         return vectors / norms

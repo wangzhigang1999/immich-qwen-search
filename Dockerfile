@@ -17,12 +17,12 @@ ENV PATH=/opt/adapter/bin:$PATH \
     HOME=/cache \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-COPY app.py encoder.py session.py ./
+COPY app.py config.py encoder.py session.py ./
 
 USER 10001:10001
 EXPOSE 3003
 
 HEALTHCHECK --interval=30s --timeout=5s \
-    CMD ["python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:3003/ping', timeout=3).read() == b'pong'"]
+    CMD ["python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:3003/ping').read() == b'pong'"]
 
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "3003", "--no-access-log"]

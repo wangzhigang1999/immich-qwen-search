@@ -2,5 +2,6 @@
 !Dockerfile
 !requirements.txt
 !app.py
+!config.py
 !encoder.py
 !session.py

@@ -35,6 +35,8 @@ jobs:
             jq -e '.services["immich-qwen-search"].volumes[0] | .type == "volume" and .target == "/cache"'
           QWEN_MODEL_CACHE="$RUNNER_TEMP/qwen-cache" docker compose -f compose.qwen.yaml config --format json |
             jq -e '.services["immich-qwen-search"].volumes[0] | .type == "bind" and .target == "/cache"'
+          docker compose --env-file qwen.env.example -f compose.qwen.yaml -f compose.qwen.cpu.yaml config --format json |
+            jq -e '.services["immich-qwen-search"] | .environment.QWEN_ST_DEVICE == "cpu" and .environment.QWEN_ST_MODEL != null and .deploy == null'
       - name: Build Linux image
         run: |
           docker build --platform linux/amd64 \

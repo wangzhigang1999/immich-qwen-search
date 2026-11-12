@@ -1,0 +1,5 @@
+services:
+  immich-qwen-search:
+    environment:
+      QWEN_ST_DEVICE: cpu
+    deploy: !reset null
